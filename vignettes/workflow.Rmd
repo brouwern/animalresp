@@ -1,0 +1,66 @@
+---
+title: "Untitled"
+author: "Nathan Brouwer"
+date: "May 3, 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+```
+
+## Source function
+```{r}
+source('./R/clean_resp_dat.R')
+source('./R/Untitled.R')
+```
+
+
+```{r}
+read.csv(file = "./data-raw/23-apr.csv",sep = ",")
+```
+
+
+## Worflow
+
+### Load data
+```{r}
+#debugonce(clean_resp_dat)
+clean_resp_dat(raw_data_folder = "./data-raw/",
+                           raw_data_file = "23-apr.csv",
+                           clean_data_folder = "./data/",
+                           clean_file_name = "my_clean_data.csv",
+                           object_name = "my_phys")
+```
+
+
+### Code the flush periods
+```{r}
+my_phys_coded <- code_flushes(dat = my_phys,
+             time_col = "time.min",
+                         variable_col = "Q.S102.O2.Pcor",
+                         channel_col = "channel",
+                         n_chambers = 8,
+                         n_cycles = 4,
+                         measures_per_cycle = 48,
+                         flush_cutoff = 19)
+```
+
+
+### Plot data
+
+```{r}
+ggplot(data = my_phys_coded,
+       aes(y = Q.S102.O2.Pcor ,
+           x = chamb.measure.i,
+           color = factor(phase))) + 
+  geom_point() +
+  facet_wrap(~channel)
+```
+
