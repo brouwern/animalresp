@@ -51,30 +51,43 @@ Functions are in /R folder
 ```{r}
 source('./R/read_csv_append_filename.R') #loads a raw data file and appends file name
 source('./R/clean_and_resave_resp_dat.R') # cleans raw respiration data
-source('./R/code_flushes.R') #codes "flush" periods vs. data collection periods
+source('./R/clean_and_resave_multi_dat.R')
+
+source('~/1_R/git/animalresp/R/code_resp_dat.R')
+#source('./R/code_flushes.R') #codes "flush" periods vs. data collection periods
+
 ```
 
 
 
 ## Workflow
 
-### Clean all of the data
+### Clean data
+
+This removes formatting from the instrument and makes other minor changes
 
 Get all file names associated with an experiment.
 ```{r}
-rawdata_filepaths <- list.files(path = "./data-raw/", 
+rawdata_filepaths <- list.files(path = "./data-raw/",
+                                pattern = ".csv",
                         full.names = TRUE, 
                         ignore.case = TRUE)
 
 ```
 
+
+Clean data and re-save to data-clean directory
 ```{r}
-#read in data, append file name
-dat.study.i <- clean_and_resave_resp_dat(rawdata_filepaths[1])
+# clean a single file
+clean_and_resave_resp_dat(rawdata_filepaths[1],object_name = NULL)
+
+# clean all in a directory files
+clean_and_resave_multi_dat(rawdata_filepaths, verbose = FALSE)
 
 ```
 
 
+Get names of cleaned data
 ```{r}
 cleandata_filepaths <- list.files(path = "./data-cleaned/", 
                         full.names = TRUE, 
@@ -83,104 +96,24 @@ cleandata_filepaths <- list.files(path = "./data-cleaned/",
 ```
 
 
+
+### Code data
+
+Determine all relevant info about each data point
+
+* which chamber it was collected from
+* whether it was part of initial flush for is a valid measurement
+
+#### Code a single study
 ```{r}
-# data needed for cleaning
-n.Ch <- 7 #total number of chambers using during data collection
-n.m.pCh.pP <- 48  # mpCh.pP = measurements per chamber per pass
-                 # standard number of measurements per chamber for a full
-                 # pass through that chamber
+temp <- code_resp_dat(dat = cleandata_filepaths[1])
 
 
-
-#create index for each unique row in the dataset
-## each row = 1 unique measurement of respiration
-tot.measure <- nrow(dat.study.i)
-dat.study.i$i.row <- 1:tot.measure
-
-## n.pass = number of passes through a chamber
-
-
-## determine the total number of complete passes (n.pass.tot) 
-##   through all of the chambers chambers
-##   that is, the total number of times data was collected from the chambers
-##
-## n.pass.tot = n.mpCh*n.Ch*n.cycles
-## however, since n.cyles varies by experiments, its easiest to calcualte 
-##   n.pass.tot from the data starting w/ the total number of measurements
-##   (tot.measure); so, we want to calcualte
-## n.pass.tot = tot.measure/n.m.pCh.pP
-## 
-## the floor() function is used to round n.pass.tot down
-##  this is because the last pass on the last chabmer in the study
-##  is often not complete and not used
-n.pass.tot <- tot.measure/n.m.pCh.pP
-n.pass.tot <- floor(n.pass.tot)
-
-
-## Total number of full cycles
-n.full.cycle <- floor(n.pass.tot/n.chambers)
-
-
-## total number of measurements taken during complete passes
-### these are "valid" measurements taht can be used in the study
-valid.measure <- n.pass.tot*n.m.pCh.pP
-
-valid.measure < tot.measure
-
-# Code the replicate measures within a pass 
-dat.study.i$pass.rep.i <- NA
-
-dat.study.i$pass.rep.i[1:c(valid.measure)] <- 1:n.m.pCh.pP
-
-#look at data
-dat.study.i[c(32:54), c("i.row","pass.rep.i")]
-
-# Which measurements were coded "NA" b/c they occurred in an incomplete pass?
-i.NA.rep <- which(is.na(dat.study.i$pass.rep.i) == TRUE)
-
-#remove NAs
-dat.study.i2 <- dat.study.i[-i.NA.rep, ]
-
-#Determine the number of full cycles through all chambers
-
-## total number of valid measures that occured during a full pass 
-## where full pass = all 48 measurements taken within in a chamber
-##  (measureing not ended b/f a pass through a chamber complete)
-valid.measure2 <- nrow(dat.study.i2)
-
-
-## create a dataframe that layouts all combinations of
-### chambers, passes, and cyles
-study.layout <- expand.grid(pass.rep.i = 1:n.m.pCh.pP,
-                       chamber = 1:n.Ch,
-                       cycle.number = 1:n.full.cycle)
-
-#the total size of this dataframe is n.m.pCh.pP*n.Ch*n.full.cycle
-## that is, the (number of measurements per chamber per pass) * 
-##              (number of chambers) *
-##              (number of complete cycles)
-
-# row index to match data
-study.layout$i.row <- 1:nrow(study.layout)
-
-# using "i.row" for matching, merge the data with the study layout
-# since study.layout only has info for complete passes in complete cycles
-# NA will be assigned to any measurement taken during and incomplete cycle
-dat.study.i3 <- merge(dat.study.i2, 
-                      study.layout,all = T)
-
-dim(dat.study.i2)
-
-dim(dat.study.i3)[1]/33
-
-
-dat.study.i3$pass.i <- sort(rep(1:33,n.m.pCh.pP))
-
-summary(dat.study.i3[,c("i.row","pass.rep.i","chamber","cycle.number")])
+summary(temp[,c("i.row","pass.rep.i","chamber","cycle.number","pass.i","measure.type")])
 
 
 # Visualize data collect
-ggplot(data = dat.study.i3,
+ggplot(data = temp,
        aes(y = pass.rep.i, 
            x = i.row, 
            color = factor(chamber),
@@ -193,18 +126,37 @@ ggplot(data = dat.study.i3,
 
 
 
-ggplot(data = dat.study.i3,
+ggplot(data = temp,
        aes(y = pass.i, 
            x = i.row, 
-           color = factor(chamber),
+           color = factor(channel),
            shape = factor(cycle.number))) +
   geom_point() +
   xlab("Measurements in sequentical order") +
   ylab("Replicate measurement w/in a pass ") +
   geom_hline(yintercept = 19)
 
+
+
+
+head(temp[,c("channel","chamber")])
+tail(temp[,c("channel","chamber")])
+
+with(temp,all(channel == chamber))
 ```
 
+#### Code all studies in a directory
+
+```{r}
+#assign names to vector of files names
+## so that they get passed to list of processed data
+names(cleandata_filepaths) <- cleandata_filepaths
+
+coded.data.list <- llply(cleandata_filepaths, code_resp_dat)
+
+names(coded.data.list)
+length(coded.data.list)
+```
 
 
 
@@ -215,132 +167,48 @@ ggplot(data = dat.study.i3,
 az.metadata <- read.csv("./metadata/AZ_metadata.csv")
 ```
 
+### Merge Data
 
 ```{r}
-#get file names
-filenames <- list.files(path = "./data-raw", full.names = TRUE, ignore.case = TRUE)
-
-# use plyr::llply to apply read_csv_filename() to list of filenames
-## note that read_csv_filename() appends filename to
-## distinquish different file names
-import.list <- llply(filenames, read_csv_filename)
-
 # use do.call() to stack all seperate files
-merged <- do.call("rbind", import.list)
+merged.data <- do.call(rbind, coded.data.list)
+row.names(coded.data.list) <- NULL
 
 # ?? create source-file-channle ID
 ### source file plus channel number
-merged$SourceFileChannel <- paste(merged$SourceFile, merged$Latest..Channel)
+merged.data$SourceFileChannel <- paste(merged.data$SourceFile, 
+                                       merged.data$channel) #LatestChannel? Latest = ?
 
 
-# ?? use match() to cross reference meta data and data
-merged$ID <- az.metadata$ID[match(merged$SourceFileChannel, 
-                                  az.metadata$SourceFileChannel)]
+# use match() to cross reference meta data and data
+merged.data$ID <- az.metadata$ID[match(merged.data$SourceFileChannel, 
+                                       az.metadata$SourceFileChannel)]
 
-merged$Mass <- az.metadata$Mass[match(merged$SourceFileChannel, az.metadata$SourceFileChannel)]
+merged.data$Mass <- az.metadata$Mass[match(merged.data$SourceFileChannel, 
+                                      az.metadata$SourceFileChannel)]
 
-merged$Cumulative <- az.metadata$CumulativeChannelNumber[match(merged$SourceFileChannel, az.metadata$SourceFileChannel)]
+merged.data$Cumulative <- az.metadata$CumulativeChannelNumber[match(merged.data$SourceFileChannel, az.metadata$SourceFileChannel)]
 
 # save merged data
 ## saved in subfolder /data-merged
-write.csv(merged, "./data-merged/AZ-merged.csv")
+write.csv(merged.data, "./data-merged/AZ-merged.csv")
 ```
 
 
 ## Worflow
-
-### Steps in the workflow
-
-* Use clean_resp_dat() function to load, clean, and re-save data
-* Use code_flushes() to code when the "flush periods" are
-
-Note that clean_resp_dat() is a full-service function; you give it a file folder and a file name, and it loads the data, cleans it, provides some summary output, and resaves it as csv.
-
-### Arguments in clean_resp_dat() function
-
-* raw_data_folder = where the raw data lives; current needs to have "/" in proper place.
-* raw_data_file = the name of the exact file
-* clean_data_folder = where a .csv version of the data should be saved
-* clean_file_name = what to call the cleaned file
-* object_name = what to call the R object containing the clean memory; this is what will be subsequently used for analysis
-
-### Load & clean data
-
-First, load and clean the data.  This produes and object my_phys that will subsequently be used.
-
-```{r}
-clean_resp_dat(raw_data_folder = "./data-merged/",
-                           raw_data_file = "AZ-merged.csv",
-                           clean_data_folder = "./data-cleaned/",
-                           clean_file_name = "AZ-cleaned.csv",
-                           object_name = "my_phys")
-```
-
-Confirm the presence and size of the my_phys object
-
-```{r}
-dim(my_phys)
-```
-
-
-### Code the flush periods
-
-The code_flushes() function parses the cleaned data and designates which measurements were during "flush" periods and shoudl not be used in analysis, and which are valid data points ("mous").
-
-* dat = R dataframe object
-* time_col = column contain the time the data was collected
-* variable_col = column with focal measurement variable
-* channel_col = column of data frame with the channel (chamber) designation
-* n_chambers = the number of channels
-* n_cycles = the numbr of full cycles through all channels; do not include partial cycles
-* measures_per_cycle = number of times measurements were taken per cycle (? shoudl this be measures_per_channel)
-* flush_cutoff = number of initial measurements within a cycle to consider part of the flush phase
-
-
-```{r}
-
-i.floor <- floor(nrow(my_phys)/48)
-
-my_phys$i <- NA
-
-my_phys$i[1:c(i.floor*48)] <- 1:48
-
-summary(factor(my_phys$i))
-
-95*48
-
-nrow(my_phys)<- 1:48
-
-my_phys$i <- 1:48
-
-
-
-```
-
-
-
-
-```{r}
-my_phys_coded <- code_flushes(dat = my_phys,
-                         time_col = "time.min",
-                         variable_col = "Q.S102.O2.Pcor",
-                         channel_col = "Cumulative",
-                         n_chambers = 23,
-                         n_cycles = 4,
-                         measures_per_cycle = 48,
-                         flush_cutoff = 19)
-```
-
-
 ## Plot data
 
 ```{r}
-ggplot(data = my_phys_coded,
+ggplot(data = merged.data,
        aes(y = Q.S102.O2.Pcor ,
-           x = chamb.measure.i,
-           color = factor(phase))) + 
+           x = pass.rep.i,
+           group = cycle.number,
+           color= factor(cycle.number),
+           shape = measure.type)) + 
   geom_point() +
-  facet_wrap(~ID)
+  geom_line() +
+  facet_wrap(~ID) +
+  geom_vline(xintercept = 19)
 ```
 
 
@@ -348,10 +216,10 @@ ggplot(data = my_phys_coded,
 
 ### Global minimum
 
-Lowest value for a each chamber accross all cycles
+Lowest value for a each mouse accross all cycles
 ```{r}
-global.min <- dcast(data = my_phys_coded,
-      formula = channel ~ .,
+global.min <- dcast(data = merged.data,
+      formula = ID ~ .,
       value.var = "Q.S102.O2.Pcor",
       fun.aggregate = min)
 
@@ -362,8 +230,8 @@ names(global.min)[2] <- "min"
 ### Minimum by Phase
 
 ```{r}
-phase.min <- dcast(data = my_phys_coded,
-      formula = channel ~ phase,
+phase.min <- dcast(data = merged.data,
+      formula = ID ~ measure.type,
       value.var = "Q.S102.O2.Pcor",
       fun.aggregate = min)
 

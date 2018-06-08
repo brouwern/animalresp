@@ -1,0 +1,168 @@
+---
+title: "Cleaning Respiration Data Workflow"
+author: "Nathan Brouwer"
+date: "May 3, 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r}
+#plotting function
+library(ggplot2)
+
+#cleans up ggplot
+library(cowplot)
+
+
+#reshape data to calcualte minimum
+library(reshape2)
+```
+
+## Source function
+
+Load the 2 functions used
+
+* clean_resp_dat()
+* code_flushes()
+
+
+```{r}
+source('./R/clean_resp_dat.R')
+source('./R/code_flushes.R')
+```
+
+
+
+## Worflow
+
+### Steps in the workflow
+
+* Use clean_resp_dat() function to load, clean, and re-save data
+* Use code_flushes() to code when the "flush periods" are
+
+Note that clean_resp_dat() is a full-service function; you give it a file folder and a file name, and it loads the data, cleans it, provides some summary output, and resaves it as csv.
+
+### Arguments in clean_resp_dat() function
+
+* raw_data_folder = where the raw data lives; current needs to have "/" in proper place.
+* raw_data_file = the name of the exact file
+* clean_datat_folder = where a .csv version of the data should be saved
+* clean_file_name = what to call the clened file
+* object_name = what to call the R object containing the clean memory; this is what will be subsequently used for analysis
+
+### Load & clean data
+
+First, load and clean the data.  This produes and object my_phys that will subsequently be used.
+
+```{r}
+clean_resp_dat(raw_data_folder = "./data-raw/",
+                           raw_data_file = "23-apr.csv",
+                           clean_data_folder = "./data/",
+                           clean_file_name = "my_clean_data.csv",
+                           object_name = "my_phys")
+```
+
+
+Confirm the presence and size of the my_phys object
+
+```{r}
+dim(my_phys)
+```
+
+
+### Code the flush periods
+
+The code_flushes() function parses the cleaned data and designates which measurements were during "flush" periods and shoudl not be used in analysis, and which are valid data points ("mous").
+
+* dat = R dataframe object
+* time_col = column contain the time the data was collected
+* variable_col = column with focal measurement variable
+* channel_col = column of data frame with the channel (chamber) designation
+* n_chambers = the number of channesl
+* n_cycles = the numbr of full cycles through all channels; do not include partial cycles
+* measures_per_cycle = number of times measurements were taken per cycle (? shoudl this be measures_per_channel)
+* flush_cutoff = number of initial measurements within a cycle to consider part of the flush phase
+
+```{r}
+my_phys_coded <- code_flushes(dat = my_phys,
+                         time_col = "time.min",
+                         variable_col = "Q.S102.O2.Pcor",
+                         channel_col = "channel",
+                         n_chambers = 8,
+                         n_cycles = 4,
+                         measures_per_cycle = 48,
+                         flush_cutoff = 19)
+```
+
+
+## Plot data
+
+```{r}
+ggplot(data = my_phys_coded,
+       aes(y = Q.S102.O2.Pcor ,
+           x = chamb.measure.i,
+           color = factor(phase))) + 
+  geom_point() +
+  facet_wrap(~channel)
+```
+
+
+## Calcualte minimum
+
+
+Check data being input into summary functions
+```{r}
+my_phys_coded$phase <- as.factor(my_phys_coded$phase)
+
+summary(my_phys_coded[,c("channel","Q.S102.O2.Pcor","phase","chamb.measure.i","time.min")])
+```
+
+
+### Global minimum
+
+Lowest value for a each chamber accross all cycles
+```{r}
+
+global.min <- dcast(data = my_phys_coded,
+      formula = channel ~ .,
+      value.var = "Q.S102.O2.Pcor",
+      fun.aggregate = min)
+
+names(global.min)[2] <- "min"
+```
+
+
+
+```{r}
+library(doBy)
+
+summaryBy(Q.S102.O2.Pcor ~ channel, data = my_phys_coded, FUN = min)
+```
+
+### Minimum by Phase
+
+```{r}
+phase.min <- dcast(data = my_phys_coded,
+      formula = channel ~ phase,
+      value.var = "Q.S102.O2.Pcor",
+      fun.aggregate = min)
+
+```
+
+
+### Variance by Phase
+
+```{r}
+phase.var <- dcast(data = my_phys_coded,
+      formula = channel ~ phase,
+      value.var = "Q.S102.O2.Pcor",
+      fun.aggregate = var)
+
+```

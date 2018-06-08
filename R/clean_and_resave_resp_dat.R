@@ -10,8 +10,13 @@ clean_and_resave_resp_dat <- function(#raw_data_folder = "./data-raw/",
                            raw_data_file = "23-apr.csv",
                            clean_data_folder_name = "data-cleaned",
                            #clean_file_name = "my_clean_data.csv",
-                           object_name = NULL #given an object name to keep in memory
-                           ){
+                           object_name = NULL, #given an object name to keep in memory
+                           verbose = TRUE){
+  
+  if(verbose == TRUE){
+    cat("Raw .csv file being cleaned and re-saved.  
+Use the object_name arguement to save as an object in memory for direct manipulation")}
+    
   
 
   #raw_dat <- paste0(raw_data_folder,raw_data_file)
