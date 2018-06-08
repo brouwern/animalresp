@@ -1,9 +1,9 @@
-code_resp_dat <- function(dat,
+code_resp_dat <- function(file.path,
          n.Ch = 7, #total number of chambers using during data collection
          n.m.pCh.pP = 48, ## n.mpCh.pP = measurements per chamber per pass standard number of measurements per chamber for a full pass through that chamber
          flush_cutoff = 19){ # 
   
-dat <- read.csv(cleandata_filepaths[1])
+dat <- read.csv(file.path)
 
 #create index for each unique row in the dataset
 ## each row = 1 unique measurement of respiration

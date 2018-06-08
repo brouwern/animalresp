@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Introduction 
 
-This scipt contains a workflow for importing data from respiration measurements from XXXXXX, processing, and summarizing the data.
+This script contains a workflow for importing data from respiration measurements from XXXXXX, processing, and summarizing the data.
 
 Key steps in the workflow are
 
@@ -53,8 +53,7 @@ source('./R/read_csv_append_filename.R') #loads a raw data file and appends file
 source('./R/clean_and_resave_resp_dat.R') # cleans raw respiration data
 source('./R/clean_and_resave_multi_dat.R')
 
-source('~/1_R/git/animalresp/R/code_resp_dat.R')
-#source('./R/code_flushes.R') #codes "flush" periods vs. data collection periods
+source('./R/code_resp_dat.R')
 
 ```
 
@@ -68,7 +67,7 @@ This removes formatting from the instrument and makes other minor changes
 
 Get all file names associated with an experiment.
 ```{r}
-rawdata_filepaths <- list.files(path = "./data-raw/",
+rawdata_filepaths <- list.files(path = "./data-raw",
                                 pattern = ".csv",
                         full.names = TRUE, 
                         ignore.case = TRUE)
@@ -78,20 +77,38 @@ rawdata_filepaths <- list.files(path = "./data-raw/",
 
 Clean data and re-save to data-clean directory
 ```{r}
-# clean a single file
+# clean a *single* file
+## THis function takes a *single* file path and cleans it
+## set object_name = ... to save to memory; otherwise it
+## will just save the file to a new directory
+## this is for demonstration
+## 
 clean_and_resave_resp_dat(rawdata_filepaths[1],object_name = NULL)
 
-# clean all in a directory files
-clean_and_resave_multi_dat(rawdata_filepaths, verbose = FALSE)
+# Clean all in a directory files
+clean_and_resave_multi_dat(rawdata_filepaths)
 
 ```
 
 
 Get names of cleaned data
 ```{r}
-cleandata_filepaths <- list.files(path = "./data-cleaned/", 
+cleandata_filepaths <- list.files(path = "./data-cleaned", 
                         full.names = TRUE, 
                         ignore.case = TRUE)
+
+```
+
+
+```{r}
+x <- read.csv("./data-cleaned/AZ_21_APR_2018-clean.csv" )
+y <- read.csv("./data-cleaned/AZ_22_APR_2018-clean.csv" )
+z <- read.csv("./data-cleaned/AZ_23_APR_2018-clean.csv" )
+
+
+x$SourceFile
+y$SourceFile
+z$SourceFile
 
 ```
 
@@ -102,6 +119,7 @@ cleandata_filepaths <- list.files(path = "./data-cleaned/",
 Determine all relevant info about each data point
 
 * which chamber it was collected from
+  * this can be compared to 
 * whether it was part of initial flush for is a valid measurement
 
 #### Code a single study
@@ -109,11 +127,12 @@ Determine all relevant info about each data point
 temp <- code_resp_dat(dat = cleandata_filepaths[1])
 
 
+#summarize output to make sure it makes sense
 summary(temp[,c("i.row","pass.rep.i","chamber","cycle.number","pass.i","measure.type")])
 
 
-# Visualize data collect
-ggplot(data = temp,
+# Visualize data 
+gg1 <- ggplot(data = temp,
        aes(y = pass.rep.i, 
            x = i.row, 
            color = factor(chamber),
@@ -126,7 +145,7 @@ ggplot(data = temp,
 
 
 
-ggplot(data = temp,
+gg2 <-  ggplot(data = temp,
        aes(y = pass.i, 
            x = i.row, 
            color = factor(channel),
@@ -136,14 +155,16 @@ ggplot(data = temp,
   ylab("Replicate measurement w/in a pass ") +
   geom_hline(yintercept = 19)
 
+cowplot::plot_grid(gg1,gg2)
 
 
-
-head(temp[,c("channel","chamber")])
-tail(temp[,c("channel","chamber")])
-
-with(temp,all(channel == chamber))
+# head(temp[,c("channel","chamber")])
+# tail(temp[,c("channel","chamber")])
+# 
+# with(temp,all(channel == chamber))
 ```
+
+
 
 #### Code all studies in a directory
 
@@ -152,10 +173,18 @@ with(temp,all(channel == chamber))
 ## so that they get passed to list of processed data
 names(cleandata_filepaths) <- cleandata_filepaths
 
-coded.data.list <- llply(cleandata_filepaths, code_resp_dat)
+#use llply() to 
+coded.data.list <- llply(cleandata_filepaths, 
+                         code_resp_dat)
 
-names(coded.data.list)
-length(coded.data.list)
+
+
+
+
+coded.data.list[[1]]$SourceFile
+coded.data.list[[2]]$SourceFile
+
+# length(coded.data.list)
 ```
 
 
@@ -167,12 +196,25 @@ length(coded.data.list)
 az.metadata <- read.csv("./metadata/AZ_metadata.csv")
 ```
 
+
+
 ### Merge Data
+
+Merge cleaned and coded data respiration data with the meta data on the animals.
 
 ```{r}
 # use do.call() to stack all seperate files
-merged.data <- do.call(rbind, coded.data.list)
+merged.data <- do.call(rbind, 
+                       coded.data.list)
+
+dim(coded.data.list[[1]])
+dim(coded.data.list[[2]])
+dim(coded.data.list[[3]])
+dim(merged.data)
+
 row.names(coded.data.list) <- NULL
+
+unique(merged.data$SourceFile)
 
 # ?? create source-file-channle ID
 ### source file plus channel number
@@ -195,7 +237,12 @@ write.csv(merged.data, "./data-merged/AZ-merged.csv")
 ```
 
 
-## Worflow
+```{r}
+summary(merged.data$ID)
+```
+
+
+
 ## Plot data
 
 ```{r}
@@ -230,7 +277,7 @@ names(global.min)[2] <- "min"
 ### Minimum by Phase
 
 ```{r}
-phase.min <- dcast(data = merged.data,
+measure.type.min <- dcast(data = merged.data,
       formula = ID ~ measure.type,
       value.var = "Q.S102.O2.Pcor",
       fun.aggregate = min)
@@ -241,8 +288,8 @@ phase.min <- dcast(data = merged.data,
 ### Variance by Phase
 
 ```{r}
-phase.var <- dcast(data = my_phys_coded,
-      formula = channel ~ phase,
+measure.type.var <- dcast(data = merged.data,
+      formula = channel ~ measure.type,
       value.var = "Q.S102.O2.Pcor",
       fun.aggregate = var)
 
@@ -250,7 +297,9 @@ phase.var <- dcast(data = my_phys_coded,
 
 
 ```{r}
-summary_AZ_23_APR<- summaryBy(Q.S102.O2.Pcor ~ channel, data = my_phys_coded, FUN = c(min,max,mean,sd,var))
+summary_AZ_23_APR<- summaryBy(Q.S102.O2.Pcor  ~ channel, 
+                              data = merged.data, 
+                              FUN = c(min,max,mean,sd,var))
 write.csv(summary_AZ_23_APR, file = './summaries/summary_AZ_23_APR.csv' )
 ```
 
