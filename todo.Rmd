@@ -1,0 +1,27 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+
+TO DO:
+
+1)make sure last passes don't get tossed out - can be coded
+
+
+
+2) have coding function auto-detect the number of chambers/channels
+
+code_resp_dat(...)
+
+remove n.Ch = arguement
+can auto-detect this from each file using the channel column
+in each file
